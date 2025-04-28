@@ -1,4 +1,4 @@
-# eatEazy - Cloud-Native Food Ordering & Delivery Platform
+# eatEazy - Food Ordering & Delivery Platform
 
 **eatEazy** is a scalable and cloud-native food delivery application inspired by services like **PickMe Food** and **UberEats**. The system is built using Microservices architecture and orchestrated with Docker and Kubernetes, with a user-friendly asynchronous web client.
 
