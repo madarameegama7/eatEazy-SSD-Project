@@ -46,6 +46,6 @@ spec:
     app: restaurant-service
   ports:
     - protocol: TCP
-      port: 4002
+      port: 5002
       targetPort: 4002
   type: ClusterIP

@@ -48,6 +48,6 @@ spec:
     app: auth-service
   ports:
     - protocol: TCP
-      port: 4001
+      port: 5001
       targetPort: 4001
   type: ClusterIP
