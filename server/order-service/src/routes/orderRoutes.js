@@ -26,7 +26,7 @@ router.get("/getAllOrderbyRestaurantId/:id", authenticateToken,getAllOrderbyRest
 router.get("/getAllOrdersForAdmin", authenticateToken,isAdmin,getAllOrdersForAdmin);
 router.put("/updateCartByCartId/:cartId", authenticateToken, updateCartByCartId);
 router.delete("/deleteOrderByOrderId/:id", authenticateToken, deleteOrder);
-router.put('/:orderId/payment-status', serviceAuth, updatePaymentStatus);
+router.put('/:orderId/payment-status', updatePaymentStatus);
 router.get("/total/:orderId", authenticateToken, getOrderTotal);
 
 module.exports = router;

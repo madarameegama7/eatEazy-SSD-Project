@@ -360,105 +360,92 @@ export const CartItemsContent: React.FC<CartItemsContentProps> = ({
     }
   };
 
-  const handleCheckout = async () => {
-    try {
-      setError(null);
-  
-      if (cartItems.length === 0) {
-        setError("Your cart is empty");
-        return;
-      }
-  
-      setLoading(true);
-  
-      // Group items by restaurant for backend processing
-      const restaurantGroups: Record<string, any[]> = {};
-      const orderIds: number[] = [];
-  
-      cartItems.forEach((item) => {
-        if (!restaurantGroups[item.restaurantId]) {
-          restaurantGroups[item.restaurantId] = [];
-        }
-  
-        restaurantGroups[item.restaurantId].push({
-          menuItemId: parseInt(item.id),
-          quantity: item.quantity,
-        });
-      });
-  
-      // Process each restaurant's order
-      for (const [restId, items] of Object.entries(restaurantGroups)) {
-        try {
-          // Always create a new cart to ensure it's active
-          console.log(`Creating new cart for restaurant ${restId} with items:`, items);
-          
-          // First add items to cart
-          const response = await OrderApi.addToCart(parseInt(restId), items);
-          
-          if (!response || !response.cartId) {
-            console.error(`Failed to create cart for restaurant ${restId}`);
-            throw new Error("Could not create cart for checkout");
-          }
-          
-          // Get the new cartId
-          const cartId = response.cartId;
-          console.log(`Successfully created new cart with ID ${cartId}`);
-          
-          // Store the cartId in localStorage
-          localStorage.setItem(`cartId_${restId}`, cartId.toString());
-          
-          // Then checkout using the new cartId
-          console.log(`Checking out cart ${cartId} for restaurant ${restId}`);
-          const orderResponse = await OrderApi.checkout(parseInt(restId));
-          
-          console.log("Checkout response:", orderResponse);
-          
-          if (orderResponse && orderResponse.orderId) {
-            orderIds.push(orderResponse.orderId);
-            console.log(`Successfully created order #${orderResponse.orderId}`);
-          } else {
-            throw new Error("Checkout did not return an orderId");
-          }
-        } catch (error) {
-          console.error(`Error processing order for restaurant ${restId}:`, error);
-          throw error;
-        }
-      }
-  
-      setLoading(false);
-      
-      if (orderIds.length > 0) {
-        // Clear localStorage cart after successful checkout
-        localStorage.removeItem("cart");
-        
-        // Also remove all cartId entries
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('cartId_')) {
-            localStorage.removeItem(key);
-          }
-        });
-        
-        // Add a slight delay to ensure backend processing completes
-        setTimeout(() => {
-          // Navigate to payment page with order IDs
-          navigate("/payments", { 
-            state: { 
-              orderIds, 
-              totalAmount: finalTotal,
-              items: cartItems.length,
-              restaurantName: currentRestaurantName
-            } 
-          });
-        }, 500);
-      } else {
-        throw new Error("Failed to create orders for checkout");
-      }
-    } catch (error: any) {
-      console.error("Error during checkout:", error);
-      setLoading(false);
-      setError(error.message || "Failed to complete checkout");
+ const handleCheckout = async () => {
+  try {
+    setError(null);
+
+    if (cartItems.length === 0) {
+      setError("Your cart is empty");
+      return;
     }
-  };
+
+    setLoading(true);
+    console.log("Starting checkout process...");
+
+    // Group by restaurant and get existing cart IDs
+    const restaurantGroups = new Map();
+    cartItems.forEach(item => {
+      const restId = typeof item.restaurantId === 'string' 
+        ? parseInt(item.restaurantId) 
+        : item.restaurantId;
+
+      if (!restaurantGroups.has(restId)) {
+        // Get cartId using the numeric restaurant ID
+        const cartIdKey = `cartId_${restId}`;
+        const existingCartId = localStorage.getItem(cartIdKey);
+        console.log(`Found cartId ${existingCartId} for restaurant ${restId}`);
+
+        restaurantGroups.set(restId, {
+          items: [],
+          cartId: existingCartId,
+          name: item.restaurantName
+        });
+      }
+      restaurantGroups.get(restId).items.push({
+        menuItemId: parseInt(item.id),
+        quantity: item.quantity
+      });
+    });
+
+    const orderIds: number[] = [];
+
+    // Process checkout for each restaurant
+    for (const [restId, { items, cartId }] of restaurantGroups) {
+      try {
+        let currentCartId = cartId;
+
+        // Process checkout
+        console.log(`Processing checkout for restaurant ${restId} with cart ${currentCartId}`);
+        const orderResponse = await OrderApi.checkout(restId);
+
+        if (orderResponse?.orderId) {
+          orderIds.push(orderResponse.orderId);
+          console.log(`Successfully created order #${orderResponse.orderId}`);
+        } else {
+          throw new Error("Checkout did not return an orderId");
+        }
+      } catch (error) {
+        console.error(`Error processing order for restaurant ${restId}:`, error);
+        throw error;
+      }
+    }
+
+    // Clear cart data after successful checkout
+    localStorage.removeItem("cart");
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('cartId_')) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    // Navigate to payment page
+    navigate("/payments", {
+      state: {
+        orderIds,
+        totalAmount: finalTotal,
+        items: cartItems.length,
+        restaurantName: currentRestaurantName
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Error during checkout:", error);
+    setLoading(false);
+    setError(error.message || "Failed to complete checkout");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Calculate additional values
   const finalTotal = totalAmount;

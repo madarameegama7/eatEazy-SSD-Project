@@ -4,50 +4,66 @@ require('dotenv').config();
 
 const initiatePayment = async (req, res) => {
   try {
-    const { OrderID, PaymentMethod } = req.body;
-    
-    // Validate required fields
-    if (!OrderID || !PaymentMethod) {
-      return res.status(400).json({ error: 'OrderID and PaymentMethod are required' });
+    // 1. Validate authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: No token provided"
+      });
     }
-    
-    // Validate payment method
-    const validPaymentMethods = ['PayHere'];
-    if (!validPaymentMethods.includes(PaymentMethod)) {
-      return res.status(400).json({ error: `Invalid payment method. Supported methods: ${validPaymentMethods.join(', ')}` });
+    const token = authHeader.split(" ")[1];
+
+    // 2. Validate and parse OrderID
+    const orderId = parseInt(req.params.OrderID); // Note: Changed from orderId to OrderID
+    if (!orderId || isNaN(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID"
+      });
     }
-    
-    // Get the user's token and ensure it's formatted correctly
-    let userToken = req.headers.authorization;
-    
-    // Debug the token
-    console.log('Token from request:', userToken ? `${userToken.substring(0, 15)}...` : 'No token');
-    
-    // Make sure we have a token
-    if (!userToken) {
-      console.warn('No authorization token found in request headers');
-      // If your auth middleware verified the user, you might have the token elsewhere
-      if (req.user && req.user.token) {
-        userToken = req.user.token;
-        console.log('Using token from req.user instead');
-      }
-    }
-    
-    const paymentDetails = await PaymentService.initiatePayment(OrderID, PaymentMethod, userToken);
-    res.status(201).json({ 
-      message: 'Payment initiated successfully', 
-      paymentDetails 
+
+    // 3. Call payment service
+    const paymentDetails = await PaymentService.initiatePayment(orderId, token);
+
+    // 4. Return success response
+    return res.status(201).json({
+      success: true,
+      message: 'Payment initiated successfully',
+      data: paymentDetails
     });
-  } catch (err) {
-    console.error('Error initiating payment:', err);
-    
-    if (err.message.includes('not found')) {
-      return res.status(404).json({ message: err.message });
+
+  } catch (error) {
+    // 5. Error handling
+    console.error('Payment initiation failed:', error);
+
+    // Handle specific error cases
+    if (error.message.includes('Invalid order ID')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
     }
-    
-    res.status(500).json({ 
-      message: 'Failed to initiate payment', 
-      error: err.message 
+
+    if (error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    if (error.message.includes('Authentication')) {
+      return res.status(401).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // Generic error response
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to initiate payment',
+      error: error.message
     });
   }
 };
@@ -185,7 +201,7 @@ const getPaymentHistory = async (req, res) => {
     const userToken = req.headers.authorization;
     
     // Get payment history for user
-    const payments = await PaymentService.getPaymentHistoryByUserId(userId, userToken);
+    const payments = await PaymentService.getPaymentHistoryByUserId(userId);
     
     res.status(200).json({
       success: true,
@@ -200,6 +216,7 @@ const getPaymentHistory = async (req, res) => {
     });
   }
 };
+
 
 module.exports = {
   initiatePayment,

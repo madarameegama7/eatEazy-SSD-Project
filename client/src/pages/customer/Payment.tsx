@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import ResponsiveAppBar from "@app_common/Post-Login/Navbar";
 import {
   Box,
   Paper,
   Typography,
-  TextField,
   Button,
   Container,
   CircularProgress,
@@ -15,18 +15,15 @@ import {
   Stepper,
   Step,
   StepLabel,
-  Stack,
 } from "@mui/material";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import PaymentIcon from "@mui/icons-material/Payment";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import OrderApi from "../../utils/api/OrderApi";
-import PaymentApi from "@app_utils/api/PaymentApi";
-import UserApi from "@app_utils/api/UserApi";
-import { getAccessToken} from "@app_utils/helper/TokenHelper";
+import PaymentApi, { extractPayHereParams } from "@app_utils/api/PaymentApi";
+
+//Declare PayHere globally
+declare const payhere: any;
 
 interface PaymentState {
   orderIds: number[];
@@ -35,9 +32,11 @@ interface PaymentState {
   restaurantName: string;
 }
 
-const PaymentPage = () => {
+const PaymentPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+
   const { orderIds, totalAmount, items, restaurantName } =
     (location.state as PaymentState) || {
       orderIds: [],
@@ -48,10 +47,12 @@ const PaymentPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeStep, setActiveStep] = useState(1); // 0: Cart, 1: Payment, 2: Confirmation
+  const [activeStep, setActiveStep] = useState(1);
+  const [paymentId, setPaymentId] = useState<number | null>(null);
 
-  // Validate if we have order IDs
-  React.useEffect(() => {
+  
+  // Redirect to cart if no order IDs
+  useEffect(() => {
     if (!orderIds || orderIds.length === 0) {
       navigate("/cart");
     }
@@ -59,81 +60,68 @@ const PaymentPage = () => {
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setLoading(true);
     setError(null);
 
     try {
-      const token = getAccessToken();
-      if (!token) throw new Error("Authentication required");
+      const response = await PaymentApi.initiatePayment(orderIds[0]);
+      console.log("Payment initiation response:", response);
 
-      // Log the order details
-    console.log('Initiating payment for order:', {
-      orderId: orderIds[0],
-      amount: totalAmount
-    });
- 
-    const response = await PaymentApi.initiatePayment(orderIds[0], "PayHere");
-    console.log('Payment initiation response:', response);
+      if (!response?.success) {
+        throw new Error(response?.message || "Payment initiation failed");
+      }
 
-      // Configure PayHere
-      // @ts-ignore - PayHere is loaded from external script
-      const payhere = window.payhere;
+      const paymentData = response.data;
+      setPaymentId(paymentData.PaymentID);
 
-      // Payment configuration
+      // Extract PayHere params from redirect URL
+      const payHereParams = extractPayHereParams(paymentData.redirectUrl);
+
+      // Configure payment with extracted params
       const payment = {
-        sandbox: true, // Set to false in production
-        merchant_id: response.payHerePayload.merchant_id,
-        return_url: response.payHerePayload.return_url,
-        cancel_url: response.payHerePayload.cancel_url,
-        notify_url: response.payHerePayload.notify_url,
-        order_id: response.payHerePayload.order_id,
-        items: response.payHerePayload.items,
-        amount: response.payHerePayload.payhere_amount,
-        currency: response.payHerePayload.payhere_currency,
-        first_name: response.payHerePayload.first_name,
-        last_name: response.payHerePayload.last_name,
-        email: response.payHerePayload.email,
-        phone: response.payHerePayload.phone,
-        address: response.payHerePayload.address,
-        city: response.payHerePayload.city,
-        country: response.payHerePayload.country,
-
-        onCompleted: function onCompleted(orderId: string) {
-          // Payment completed. Update UI
-          setActiveStep(2);
-          setLoading(false);
-        },
-        onDismissed: function onDismissed() {
-          // Payment dismissed. Show error
-          setError("Payment was cancelled");
-          setLoading(false);
-        },
-        onError: function onError(error: string) {
-          // Payment error. Show message
-          setError(`Payment error: ${error}`);
-          setLoading(false);
-        },
+        sandbox: true,
+        merchant_id: 1230183,
+        return_url: payHereParams.return_url,
+        cancel_url: payHereParams.cancel_url,
+        notify_url: payHereParams.notify_url,
+        order_id: payHereParams.order_id,
+        items: payHereParams.items,
+        amount: payHereParams.amount,
+        currency: payHereParams.currency,
+        hash: payHereParams.hash,
+        first_name: "Customer",
+        last_name: "Name",
+        email: "customer@email.com",
+        phone: "0771234567",
+        address: "Address",
+        city: "City",
+        country: "Sri Lanka",
       };
 
-      // Show PayHere payment window
+      console.log("PayHere payment config:", payment);
+
+      if (typeof payhere === "undefined") {
+        throw new Error("PayHere payment gateway not loaded");
+      }
+
+      // Initialize PayHere with exact parameters from backend
       payhere.startPayment(payment);
+      setActiveStep(2);
     } catch (error: any) {
-      console.error("Payment processing error:", error);
-      setError(error.message || "Failed to process payment");
+      console.error("Payment initiation error:", error);
+      setError(error.message || "Failed to initiate payment");
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleViewOrders = () => {
-    navigate("/orders/order");
-  };
-  const handleBackToCart = () => {
-    navigate("/orders/cart");
-  };
+const handleViewOrders = () => navigate("/orders/order");
+  const handleBackToCart = () => navigate("/cart");
 
   return (
-    <Container maxWidth="md" sx={{ my: 5 }}>
+
+    <Container maxWidth="md" sx={{ my: 5, mx: 45 }}>
+       <ResponsiveAppBar />
       <Paper elevation={3} sx={{ borderRadius: 3, overflow: "hidden" }}>
         {/* Header */}
         <Box
@@ -168,7 +156,11 @@ const PaymentPage = () => {
         {/* Content */}
         <Box sx={{ p: 3 }}>
           {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
+            <Alert
+              severity="error"
+              sx={{ mb: 3 }}
+              onClose={() => setError(null)}
+            >
               {error}
             </Alert>
           )}
@@ -181,7 +173,7 @@ const PaymentPage = () => {
                 gap: 4,
               }}
             >
-              {/* Left side - Order Summary */}
+              {/* Order Summary Card */}
               <Box sx={{ flex: { md: "0 0 35%" } }}>
                 <Card sx={{ bgcolor: "#f9f9f9", borderRadius: 2 }}>
                   <CardContent>
@@ -230,6 +222,7 @@ const PaymentPage = () => {
                   </CardContent>
                 </Card>
 
+                {/* Security Info */}
                 <Box
                   sx={{
                     mt: 3,
@@ -252,7 +245,7 @@ const PaymentPage = () => {
                 </Box>
               </Box>
 
-              {/* Right side - Payment Form */}
+              {/* Payment Form */}
               <Box sx={{ flex: { md: "1 1 auto" } }}>
                 <Typography variant="h5" sx={{ mb: 3, fontWeight: "bold" }}>
                   Payment Information
@@ -275,13 +268,13 @@ const PaymentPage = () => {
                     }}
                   >
                     {loading ? (
-                      <>
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
                         <CircularProgress
                           size={24}
                           sx={{ mr: 2, color: "white" }}
                         />
                         Processing...
-                      </>
+                      </Box>
                     ) : (
                       `Proceed to Payment - Rs.${totalAmount.toFixed(2)}`
                     )}
@@ -292,42 +285,94 @@ const PaymentPage = () => {
           )}
 
           {activeStep === 2 && (
-            <Box sx={{ textAlign: "center", py: 4 }}>
-              <CheckCircleOutlineIcon
-                sx={{ fontSize: 80, color: "#4CAF50", mb: 3 }}
-              />
+            <Box>
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <CheckCircleOutlineIcon
+                  sx={{ fontSize: 80, color: "#4CAF50", mb: 3 }}
+                />
+                <Typography
+                  variant="h4"
+                  sx={{ mb: 2, fontWeight: "bold", color: "#4CAF50" }}
+                >
+                  Payment Successful!
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  Thank you for your order. Your payment of Rs.
+                  {totalAmount.toFixed(2)} has been processed successfully.
+                </Typography>
+                <Typography variant="body2">
+                  Order ID{orderIds.length > 1 ? "s" : ""}:{" "}
+                  {orderIds.join(", ")}
+                </Typography>
+              </Box>
 
-              <Typography
-                variant="h4"
-                sx={{ mb: 2, fontWeight: "bold", color: "#4CAF50" }}
-              >
-                Payment Successful!
-              </Typography>
+              {/* Order Summary Card after payment */}
+              <Box sx={{ maxWidth: 400, mx: "auto", my: 4 }}>
+                <Card sx={{ bgcolor: "#f9f9f9", borderRadius: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                      Order Summary
+                    </Typography>
 
-              <Typography variant="body1" sx={{ mb: 4 }}>
-                Thank you for your order. Your payment of Rs.
-                {totalAmount.toFixed(2)} has been processed successfully.
-              </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography>Restaurant</Typography>
+                      <Typography fontWeight="bold">
+                        {restaurantName}
+                      </Typography>
+                    </Box>
 
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                Order ID{orderIds.length > 1 ? "s" : ""}: {orderIds.join(", ")}
-              </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography>Items</Typography>
+                      <Typography>{items}</Typography>
+                    </Box>
 
-              <Button
-                variant="contained"
-                onClick={handleViewOrders}
-                startIcon={<PaymentIcon />}
-                sx={{
-                  mt: 4,
-                  py: 1.5,
-                  backgroundColor: "#EA7300",
-                  fontWeight: "bold",
-                  "&:hover": { backgroundColor: "#D66A00" },
-                  borderRadius: 2,
-                }}
-              >
-                View My Orders
-              </Button>
+                    <Divider sx={{ my: 2 }} />
+
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between" }}
+                    >
+                      <Typography variant="h6">Total</Typography>
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        color="#EA7300"
+                      >
+                        Rs.{totalAmount.toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Box>
+
+              <Box sx={{ textAlign: "center" }}>
+                <Button
+                  variant="contained"
+                  onClick={handleViewOrders}
+                  startIcon={<PaymentIcon />}
+                  sx={{
+                    mt: 2,
+                    py: 1.5,
+                    backgroundColor: "#EA7300",
+                    fontWeight: "bold",
+                    "&:hover": { backgroundColor: "#D66A00" },
+                    borderRadius: 2,
+                  }}
+                >
+                  View My Orders
+                </Button>
+              </Box>
             </Box>
           )}
         </Box>

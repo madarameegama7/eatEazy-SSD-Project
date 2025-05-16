@@ -20,7 +20,8 @@ import { CustomerDashboardContent } from "@app_components/customer/DashBoardCont
 import { RestaurantView } from "@app_components/customer/RestaurantContent";
 import {CartItemsContent} from "@app_components/customer/CartItemsContent";
 import {CustomerOrderContent} from "@app_components/customer/OrderContent";
-import PaymentPage from "./Payment";
+import NotificationsList from "@app_components/customer/NotificationsList";
+import PaymentHistory from "@app_components/customer/PaymentHistory"
 
 const theme = createTheme({
   palette: {
@@ -158,7 +159,9 @@ export default function DashboardLayoutBasic(props: DemoProps) {
       case "/orders/order":
           return  <CustomerOrderContent/>;
       case "/payments":
-          return <PaymentPage />;    
+          return <PaymentHistory />;   
+      case "/notifications":
+          return <NotificationsList />;      
       default:
         return <CustomerDashboardContent />;
     }

@@ -1,27 +1,50 @@
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const { JWT_SECRET } = require('../config/env');
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
     const authHeader = req.header('Authorization');
-    if (!authHeader) {
-        return res.status(403).json({ message: 'Access denied. No token provided.' });
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Access Denied: No Token Provided or Invalid Format' });
     }
 
     const token = authHeader.split(' ')[1];
-    if (!token) {
-        return res.status(403).json({ message: 'Access denied. Malformed token.' });
-    }
 
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(403).json({ message: `Invalid token: ${err.message}` });
+    try {
+        const response = await axios.post(
+            `http://localhost:4000/auth/verify`,
+            {
+                token: token
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (response.status === 200) {
+            req.user = response.data.user;
+            next();
+        } else {
+            return res.status(401).json({ message: 'Invalid Token' });
         }
-        req.user = decoded;
-        next();
-    });
+    } catch (err) {
+        console.error('Authentication error:', err.message);
+
+        if (err.response) {
+            return res.status(err.response.status).json({
+                message: err.response.data.message || 'Authentication failed'
+            });
+        } else if (err.request) {
+            return res.status(503).json({ message: 'Authentication service unavailable' });
+        } else {
+            return res.status(500).json({ message: 'Internal server error' });
+        }
+    }
 };
 
-// Middleware to check if user is an admin
 const isAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next(); 

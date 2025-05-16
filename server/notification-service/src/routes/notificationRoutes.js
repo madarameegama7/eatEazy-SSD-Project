@@ -6,15 +6,15 @@ const { authenticateToken } = require('../middleware/authMiddleware');
 const serviceAuth = require('../middleware/serviceAuth');
 
 // Service-to-service routes (protected by serviceAuth middleware)
-router.post('/create', serviceAuth, notificationController.createNotification);
-router.post('/send-email', serviceAuth, notificationController.sendEmailNotification);
-router.post('/send-sms', serviceAuth, notificationController.sendSMSNotification);
+router.post('/create', notificationController.createNotification);
+router.post('/send-email', notificationController.sendEmailNotification);
+router.post('/send-sms', notificationController.sendSMSNotification);
 
 // NEW SERVICE INTEGRATION ROUTES - all protected by serviceAuth
-router.post('/service/order', serviceAuth, notificationController.processOrderNotification);
-router.post('/service/payment', serviceAuth, notificationController.processPaymentNotification);
-router.post('/service/delivery', serviceAuth, notificationController.processDeliveryNotification);
-router.post('/service/restaurant', serviceAuth, notificationController.processRestaurantNotification);
+router.post('/service/order', notificationController.processOrderNotification);
+router.post('/service/payment', notificationController.processPaymentNotification);
+router.post('/service/delivery', notificationController.processDeliveryNotification);
+router.post('/service/restaurant', notificationController.processRestaurantNotification);
 
 // User-facing routes (protected by authenticateToken middleware)
 router.get('/myNotifications', authenticateToken, notificationController.getMyNotifications);
