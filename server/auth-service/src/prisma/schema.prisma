@@ -1,33 +1,39 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "./generated/prisma/client"
+  provider      = "prisma-client-js"
+  output        = "./generated/prisma/client"
   binaryTargets = ["windows", "darwin-arm64", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model RefreshTokens {
-  TokenID         Int      @id @default(autoincrement())
-  Token      String   @unique
-  user       Users    @relation(fields: [UserID], references: [UserID])
-  UserID     Int
-  ExpiresAt  DateTime
-  CreatedAt  DateTime @default(now())
-  UpdatedAt  DateTime @updatedAt
+  TokenID   Int      @id @default(autoincrement()) @map("tokenid")
+  Token     String   @unique                      @map("token")
+  UserID    Int                                   @map("userid")
+  ExpiresAt DateTime                              @map("expiresat")
+  CreatedAt DateTime @default(now())              @map("createdat")
+  UpdatedAt DateTime @updatedAt                   @map("updatedat")
+
+  user Users @relation(fields: [UserID], references: [UserID])
+
+  @@map("refreshtokens")
 }
 
 model Users {
-  UserID       Int            @id @default(autoincrement())
-  Firstname    String         @db.VarChar(255)
-  Lastname     String         @db.VarChar(255)
-  PasswordHash String         @db.VarChar(255)
-  Email        String         @unique(map: "Email") @db.VarChar(255)
-  Phone        String?        @db.VarChar(15)
-  Role         Users_Role
+  UserID       Int            @id @default(autoincrement()) @map("userid")
+  Firstname    String         @db.VarChar(255)              @map("firstname")
+  Lastname     String         @db.VarChar(255)              @map("lastname")
+  PasswordHash String         @db.VarChar(255)              @map("passwordhash")
+  Email        String         @unique                       @db.VarChar(255) @map("email")
+  Phone        String?        @db.VarChar(15)               @map("phone")
+  Role         Users_Role                                  @map("role")
+
   refreshTokens RefreshTokens[]
+
+  @@map("users")
 }
 
 enum Users_Role {
@@ -35,4 +41,6 @@ enum Users_Role {
   Restaurant
   Customer
   DeliveryPerson
+
+   @@map("users_role")
 }
