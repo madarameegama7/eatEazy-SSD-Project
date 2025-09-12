@@ -1,6 +1,6 @@
 -- Create Payment Database
-CREATE DATABASE IF NOT EXISTS eateazy;
-USE eateazy;
+CREATE DATABASE IF NOT EXISTS eateazy_payment;
+USE eateazy_payment;
 
 -- Payments Table
 CREATE TABLE IF NOT EXISTS Payments (

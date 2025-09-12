@@ -1,65 +1,69 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Carts {
-  CartID       Int      @id @default(autoincrement())
-  UserID       Int      
-  RestaurantID Int      
-  CartItems    CartItems[]
-  Status       CartStatus  @default(ACTIVE)
-  CreatedAt    DateTime    @default(now())
-  UpdatedAt    DateTime    @updatedAt
+model carts {
+  cartid       Int          @id @default(autoincrement()) @map("cartid")
+  userid       Int          @map("userid")
+  restaurantid Int          @map("restaurantid")
+  cartitems    cartitems[]
+  status       cartstatus   @default(ACTIVE) @map("status")
+  createdat    DateTime     @default(now())  @map("createdat")
+  updatedat    DateTime     @updatedAt       @map("updatedat")
+
+  @@map("carts")
 }
 
-model CartItems {
-  CartItemsID Int   @id @default(autoincrement())
-  CartID      Int
-  Cart        Carts     @relation(fields: [CartID], references: [CartID])
-  MenuItemID  Int   
-  Quantity    Int      @default(1)
-  Price Float
+model cartitems {
+  cartitemsid Int     @id @default(autoincrement()) @map("cartitemsid")
+  cartid      Int     @map("cartid")
+  menuitemid  Int     @map("menuitemid")
+  quantity    Int     @default(1) @map("quantity")
+  price       Float   @map("price")
+
+  cart carts @relation(fields: [cartid], references: [cartid])
+
+  @@map("cartitems")
 }
 
-model Orders {
-  OrderID      Int      @id @default(autoincrement())
-  UserID       Int      
-  RestaurantID Int      
-  CartID       Int    
-  Items        OrderItems[] 
-  TotalAmount  Float
-  Status       paymentStatus @default(Pending) 
-  CreatedAt    DateTime    @default(now())
-  UpdatedAt    DateTime    @updatedAt
+model orders {
+  orderid      Int            @id @default(autoincrement()) @map("orderid")
+  userid       Int            @map("userid")
+  restaurantid Int            @map("restaurantid")
+  cartid       Int            @map("cartid")
+  items        orderitems[]
+  totalamount  Float          @map("totalamount")
+  status       paymentstatus  @default(Pending) @map("status")
+  createdat    DateTime       @default(now())   @map("createdat")
+  updatedat    DateTime       @updatedAt        @map("updatedat")
+
+  @@map("orders")
 }
 
-model OrderItems {
-  OrderItemsID Int   @id @default(autoincrement())
-  OrderID    Int
-  Order       Orders    @relation(fields: [OrderID], references: [OrderID])
-  MenuItemID  Int   
-  Quantity    Int
-  Price       Float   
+model orderitems {
+  orderitemsid Int     @id @default(autoincrement()) @map("orderitemsid")
+  orderid      Int     @map("orderid")
+  menuitemid   Int     @map("menuitemid")
+  quantity     Int     @map("quantity")
+  price        Float   @map("price")
+
+  order orders @relation(fields: [orderid], references: [orderid])
+
+  @@map("orderitems")
 }
 
-enum CartStatus {
-  ACTIVE      
-  COMPLETED 
+enum cartstatus {
+  ACTIVE
+  COMPLETED
 }
 
-enum paymentStatus {
+enum paymentstatus {
   Pending
   Completed
   Failed
