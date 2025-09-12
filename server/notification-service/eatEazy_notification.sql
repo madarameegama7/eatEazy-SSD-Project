@@ -1,6 +1,6 @@
 -- Create Notification Database
-CREATE DATABASE IF NOT EXISTS eateazy;
-USE eateazy;
+CREATE DATABASE IF NOT EXISTS eateazy_notification;
+USE eateazy_notification;
 
 -- Notifications Table
 CREATE TABLE IF NOT EXISTS Notifications (

@@ -7,3 +7,4 @@ node_modules
 # Ignore Kubernetes secrets and config maps
 *.secret.yaml
 *.config.yaml
+/src/generated/prisma

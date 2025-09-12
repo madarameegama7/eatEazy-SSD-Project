@@ -1,43 +1,60 @@
--- Create ENUM types directly in each table definition (MySQL doesn't support separate ENUM types)
-
--- Table: Carts
-CREATE TABLE Carts (
-  CartID INT AUTO_INCREMENT PRIMARY KEY,
-  UserID INT NOT NULL,
-  RestaurantID INT NOT NULL,
-  Status ENUM('ACTIVE', 'COMPLETED') DEFAULT 'ACTIVE',
-  CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- 1. Enums
+CREATE TYPE cartstatus AS ENUM (
+    'ACTIVE',
+    'COMPLETED'
 );
 
--- Table: CartItems
-CREATE TABLE CartItems (
-  CartItemsID INT AUTO_INCREMENT PRIMARY KEY,
-  CartID INT NOT NULL,
-  MenuItemID INT NOT NULL,
-  Quantity INT DEFAULT 1,
-  Price FLOAT NOT NULL,
-  CONSTRAINT FK_CartItems_CartID FOREIGN KEY (CartID) REFERENCES Carts(CartID)
+CREATE TYPE paymentstatus AS ENUM (
+    'Pending',
+    'Completed',
+    'Failed'
 );
 
--- Table: Orders
-CREATE TABLE Orders (
-  OrderID INT AUTO_INCREMENT PRIMARY KEY,
-  UserID INT NOT NULL,
-  RestaurantID INT NOT NULL,
-  CartID INT NOT NULL,
-  TotalAmount FLOAT NOT NULL,
-  Status ENUM('Pending', 'Completed', 'Failed') DEFAULT 'Pending',
-  CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- 2. Carts table
+CREATE TABLE carts (
+    cartid SERIAL PRIMARY KEY,
+    userid INT NOT NULL,
+    restaurantid INT NOT NULL,
+    status cartstatus NOT NULL DEFAULT 'ACTIVE',
+    createdat TIMESTAMP NOT NULL DEFAULT NOW(),
+    updatedat TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Table: OrderItems
-CREATE TABLE OrderItems (
-  OrderItemsID INT AUTO_INCREMENT PRIMARY KEY,
-  OrderID INT NOT NULL,
-  MenuItemID INT NOT NULL,
-  Quantity INT NOT NULL,
-  Price FLOAT NOT NULL,
-  CONSTRAINT FK_OrderItems_OrderID FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
+-- 3. CartItems table
+CREATE TABLE cartitems (
+    cartitemsid SERIAL PRIMARY KEY,
+    cartid INT NOT NULL,
+    menuitemid INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price DOUBLE PRECISION NOT NULL,
+    CONSTRAINT fk_cart FOREIGN KEY (cartid)
+        REFERENCES carts (cartid)
+        ON DELETE CASCADE
+);
+
+-- 4. Orders table
+CREATE TABLE orders (
+    orderid SERIAL PRIMARY KEY,
+    userid INT NOT NULL,
+    restaurantid INT NOT NULL,
+    cartid INT NOT NULL,
+    totalamount DOUBLE PRECISION NOT NULL,
+    status paymentstatus NOT NULL DEFAULT 'Pending',
+    createdat TIMESTAMP NOT NULL DEFAULT NOW(),
+    updatedat TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_cart_order FOREIGN KEY (cartid)
+        REFERENCES carts (cartid)
+        ON DELETE CASCADE
+);
+
+-- 5. OrderItems table
+CREATE TABLE orderitems (
+    orderitemsid SERIAL PRIMARY KEY,
+    orderid INT NOT NULL,
+    menuitemid INT NOT NULL,
+    quantity INT NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    CONSTRAINT fk_order FOREIGN KEY (orderid)
+        REFERENCES orders (orderid)
+        ON DELETE CASCADE
 );
