@@ -6,16 +6,13 @@ const { ORDER_SERVICE_URL } = require('../config/env');
 
 const PaymentRepository = {
   createPayment: async (paymentData) => {
-    const { OrderID, UserID, TransactionID, PaymentMethod, PaymentStatus, Amount } = paymentData;
-    
-    // Ensure UserID is valid
-    const validUserId = UserID || 3; // Fallback to customer ID 3 if null
+    const { OrderID, UserID, Amount, PaymentMethod, PaymentStatus = 'Completed' } = paymentData;
     
     const query = `
-      INSERT INTO Payments (OrderID, UserID, Amount, TransactionID, PaymentMethod, PaymentStatus)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO Payments (OrderID, UserID, Amount, PaymentMethod, PaymentStatus)
+      VALUES (?, ?, ?, ?, ?)
     `;
-    const [result] = await pool.execute(query, [OrderID, validUserId, Amount, TransactionID, PaymentMethod, PaymentStatus]);
+    const [result] = await pool.execute(query, [OrderID, UserID, Amount, PaymentMethod, PaymentStatus]);
     return result.insertId;
   },
   
@@ -47,14 +44,13 @@ const PaymentRepository = {
         }
       }
       
-      // For webhook context (no user token) or if fetching with user token failed
       console.log(`OrderID ${OrderID}: No user token or fetching with token failed. Using fallback data.`);
       
       // Return fallback data that contains the minimum we need for payment processing
       return {
         OrderID: parseInt(OrderID),
-        UserID: 3, // Default admin user
-        TotalAmount: 0, // Will be overridden by the actual payment amount
+        UserID: 3, 
+        TotalAmount: 0, 
         Email: process.env.FALLBACK_ADMIN_EMAIL || 'kumodib@gmail.com',
         Phone: process.env.FALLBACK_ADMIN_PHONE || '94768501850',
         Name: 'Kumodi Bogahawatte'

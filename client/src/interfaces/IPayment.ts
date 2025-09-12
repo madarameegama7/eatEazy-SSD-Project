@@ -24,6 +24,18 @@ export interface IPayment {
     address: string;
     city: string;
     country: string;
+    hash: string
   }
+
+  
+export interface IPaymentHistoryItem {
+  PaymentID: number;
+  OrderID: number;
+  Amount: number;
+  PaymentMethod: string;
+  CreatedAt: string;
+  Status: string;
+  TransactionReference?: string;
+}
   
   

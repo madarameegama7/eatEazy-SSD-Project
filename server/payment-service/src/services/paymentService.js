@@ -1,9 +1,8 @@
-// services/paymentService.js
 const crypto = require('crypto');
 const axios = require('axios');
-const jwt = require('jsonwebtoken'); // ADDED: To decode user token
+const jwt = require('jsonwebtoken');
 const PaymentModel = require('../models/paymentModel');
-const PaymentRepository = require('../repository/paymentRepository'); // Renamed import
+const PaymentRepository = require('../repository/paymentRepository');
 const {
   PAYHERE_MERCHANT_SECRET,
   PAYHERE_MERCHANT_ID,
@@ -11,69 +10,73 @@ const {
   PAYHERE_CANCEL_URL,
   PAYHERE_NOTIFY_URL,
   SERVICE_API_KEY,
-  API_GATEWAY_URL, 
-  NODE_ENV,
+  API_GATEWAY_PORT
 } = require('../config/env');
 
+const generateSignature = (orderDetails) => {
+  const merchantSecret = PAYHERE_MERCHANT_SECRET;
+  
+  const amountFormatted = parseFloat(orderDetails.amount).toFixed(2);
+  
+  // Create signature string
+  const signatureString = 
+    PAYHERE_MERCHANT_ID + 
+    orderDetails.order_id + 
+    amountFormatted + 
+    'LKR' + 
+    crypto
+      .createHash('md5')
+      .update(merchantSecret)
+      .digest('hex')
+      .toUpperCase();
 
-// Helper: Generate PayHere Signature
-const generateSignature = (orderDetails, merchantSecret) => {
-  const stringToHash =
-    `${orderDetails.merchant_id}${orderDetails.order_id}${orderDetails.amount}${orderDetails.currency}${merchantSecret}`;
+  // Generate final hash
   return crypto
     .createHash('md5')
-    .update(stringToHash)
+    .update(signatureString)
     .digest('hex')
     .toUpperCase();
 };
 
-// Helper: Update order service payment status (with retry)
-const updateOrderPaymentStatus = async (OrderID, paymentStatus) => {
-  // Use API Gateway URL or specific Order Service URL 
-  const orderServiceUrl = process.env.API_GATEWAY_URL || process.env.ORDER_SERVICE_URL || 'http://localhost:4000';
-
+const updateOrderPaymentStatus = async (OrderID, paymentStatus, userToken) => {
   try {
-    console.log(`Attempting to update order #${OrderID} payment status to ${paymentStatus} via ${orderServiceUrl}`);
+    const orderServiceUrl = `http://localhost:4000/orders/${OrderID}/payment-status`;
     
-    // Ensure appropriate order service endpoint - check with your team what the correct endpoint is
-    const endpoint = `/orders/${OrderID}/payment-status`;
-    
-    const response = await axios.put(`${orderServiceUrl}${endpoint}`, {
-      paymentStatus
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        // Always use SERVICE_API_KEY for service-to-service communication
-        'Authorization': `Bearer ${process.env.SERVICE_API_KEY}`
-      },
-      timeout: 5000
-    });
+    console.log(`Attempting to update order #${OrderID} payment status to ${paymentStatus}`);
+
+    const response = await axios.put(
+      orderServiceUrl, 
+      { paymentStatus }, 
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        }
+      }
+    );
 
     if (response.status >= 200 && response.status < 300) {
       console.log(`Order #${OrderID} payment status updated successfully`);
       return response.data;
-    } else {
-      console.error(`Order service returned non-success status ${response.status} for order #${OrderID}.`, response.data);
-      throw new Error(`Order service returned status ${response.status}`);
     }
+
+    throw new Error(`Order service returned status ${response.status}`);
+
   } catch (error) {
     console.error(`Failed to update order status for order #${OrderID}:`, 
-      error.response ? error.response.data?.message || JSON.stringify(error.response.data) : error.message);
-    return { success: false, error: error.message };
+      error.response?.data || error.message
+    );
+    return { 
+      success: false, 
+      error: error.response?.data?.message || error.message 
+    };
   }
 };
 
-// Helper: Send Notification (Refactored to call Notification Service)
-// These helpers now just call the Notification Service via API_GATEWAY_URL
-// They accept necessary user details (email, phone, userId, etc.) directly
-// The Notification Service is assumed to trust the calling service (Payment Service)
-// because it's authenticated by SERVICE_API_KEY.
-const sendEmailNotification = async (email, userId, type, data) => { 
-  // Use direct notification service URL to bypass API Gateway
-  const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:4010';
+const sendEmailNotification = async (email, userId, type, data,userToken) => { 
   try {
       console.log(`Sending email notification (type: ${type}) to userId ${userId}`);
-      const response = await axios.post(`${notificationServiceUrl}/send-email`, { // Remove "/notifications" prefix
+      const response = await axios.post(`http://localhost:4000/notifications/send-email`, {
         email,
         userId,
         type,
@@ -81,9 +84,8 @@ const sendEmailNotification = async (email, userId, type, data) => {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SERVICE_API_KEY}`
-        },
-        timeout: 5000
+          'Authorization': `Bearer ${userToken}`
+        }
       });
       console.log(`Email notification request sent for userId ${userId}, type ${type}`);
       return response.data;
@@ -93,11 +95,10 @@ const sendEmailNotification = async (email, userId, type, data) => {
   }
 };
 
-const sendSMSNotification = async (phone, userId, type, data) => {
-  const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:4010';
+const sendSMSNotification = async (phone, userId, type, data,userToken) => {
   try {
       console.log(`Sending SMS notification (type: ${type}) to userId ${userId}`);
-      const response = await axios.post(`${notificationServiceUrl}/send-sms`, { // Remove "/notifications" prefix
+      const response = await axios.post(`http://localhost:4000/notifications/send-sms`, {
         phone,
         userId,
         type,
@@ -105,9 +106,8 @@ const sendSMSNotification = async (phone, userId, type, data) => {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SERVICE_API_KEY}`
-        },
-        timeout: 5000
+          'Authorization': `Bearer ${userToken}`
+        }
       });
       console.log(`SMS notification request sent for userId ${userId}, type ${type}`);
       return response.data;
@@ -117,11 +117,10 @@ const sendSMSNotification = async (phone, userId, type, data) => {
   }
 };
 
-const createInAppNotification = async (userId, message, type = 'PAYMENT_STATUS_CHANGE') =>{
-  const notificationServiceUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:4010';
+const createInAppNotification = async (userId, message, type = 'PAYMENT_STATUS_CHANGE',userToken) =>{
   try {
       console.log(`Creating in-app notification (type: ${type}) for userId ${userId}`);
-      const response = await axios.post(`${notificationServiceUrl}/create`, { // Remove "/notifications" prefix
+      const response = await axios.post(`http://localhost:4000/notifications/create`, {
         userId,
         message,
         channel: 'InApp',
@@ -131,7 +130,6 @@ const createInAppNotification = async (userId, message, type = 'PAYMENT_STATUS_C
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.SERVICE_API_KEY}`
         },
-        timeout: 5000
       });
 
       if (response.status >= 200 && response.status < 300) {
@@ -147,8 +145,7 @@ const createInAppNotification = async (userId, message, type = 'PAYMENT_STATUS_C
   }
 }
 
-// Master notification function for payment events (calls the new helpers)
-const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken) => { // ADDED userToken parameter
+const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken) => {
   console.log(`Triggering payment notifications for order #${orderID} with status ${paymentStatus}`);
   const results = {
     inApp: false,
@@ -157,21 +154,19 @@ const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken
   };
 
    try {
-     // Get order details once to get user info for notifications
-     // Pass userToken here for the call to the Order Service, as it might need it
-     // The ideal fix is Order Service accepting SERVICE_API_KEY for internal calls.
      const orderDetails = await getOrderDetailsFromService(orderID, userToken);
      if (!orderDetails || !orderDetails.UserID) {
        console.error(`User details not found for order #${orderID} to send notifications.`);
        return { success: false, channels: results, error: 'User details not found' };
      }
 
-     const userId = orderDetails.UserID;
-     const userEmail = orderDetails.Email || orderDetails.UserEmail; // Get email
-     const userPhone = orderDetails.Phone || orderDetails.UserPhone; // Get phone
-     const customerName = orderDetails.Name || orderDetails.UserName || 'Customer'; // Get name
+     const userDetails = await verifyToken(userToken);
 
-     // Construct appropriate message based on payment status for In-App notification
+     const userId = orderDetails.UserID;
+     const userEmail = userDetails.email; 
+     const userPhone = orderDetails.Phone || orderDetails.UserPhone;
+     const customerName = orderDetails.Name || orderDetails.UserName || 'Customer';
+
      let inAppMessage;
      // Determine notification type for Email/SMS templates
      const notificationType = paymentStatus === 'Completed' ? 'paymentSuccess' : 'paymentFailed';
@@ -188,19 +183,18 @@ const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken
      // Data payload for email/SMS templates - include all info the template might need
      const notificationData = {
         orderId: orderID,
-        totalAmount: amount, // Pass amount as number, template can format
+        totalAmount: amount, 
         customerName: customerName,
-        // Add any other data needed by the templates (e.g., reason for failure)
      };
 
      // 1. Always try to create in-app notification
-     const inAppResult = await createInAppNotification(userId, inAppMessage, 'PAYMENT_STATUS_CHANGE'); // Pass userId and message
+     const inAppResult = await createInAppNotification(userId, inAppMessage, 'PAYMENT_STATUS_CHANGE',userToken); // Pass userId and message
      results.inApp = inAppResult?.success !== false; // Check for success property
 
      // 2. Then try email notification (if email available)
      if (userEmail) {
        // Use the notificationType for email template lookup in Notification Service
-       const emailResult = await sendEmailNotification(userEmail, userId, notificationType, notificationData); // Pass email, userId, type, data
+       const emailResult = await sendEmailNotification(userEmail, userId, notificationType, notificationData,userToken); // Pass email, userId, type, data
        results.email = emailResult?.success !== false;
      } else {
         console.warn(`Email not available for user #${userId} (Order #${orderID}) for email notification.`);
@@ -223,11 +217,9 @@ const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken
      };
    } catch (error) {
      console.error(`Error in payment notification process for order #${orderID}:`, error.message);
-     // This catch block only catches errors *within* this function, not in the async calls above
-     // Error handling for individual notifications is done in the helpers
      return {
        success: false,
-       channels: results, // Return partial results if some succeeded
+       channels: results,
        error: error.message
      };
    }
@@ -236,205 +228,156 @@ const sendPaymentNotification = async (orderID, paymentStatus, amount, userToken
 
 // Get order details from Order Service
 const getOrderDetailsFromService = async (OrderID, userToken) => {
-  console.log(`PaymentService calling PaymentRepository to get Order details for OrderID ${OrderID}`);
-  return await PaymentRepository.getOrderDetailsFromService(OrderID, userToken); // Keep userToken parameter for now if needed by Order Service
+  try {
+    const response = await axios.get(
+      `http://localhost:4000/orders/getOrderByOrderId/${OrderID}`,
+      {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+        },
+      }
+    );
+
+    // Check if response.data exists and is in expected format
+    if (!response.data) {
+      throw new Error(`No data received for order #${OrderID}`);
+    }
+
+    // If response.data is already a single order object
+    if (!Array.isArray(response.data)) {
+      return response.data;
+    }
+
+    // If response.data is an array, find the matching order
+    const order = response.data.find(o => o.orderID === parseInt(OrderID));
+    if (!order) {
+      throw new Error(`Order #${OrderID} not found`);
+    }
+
+    return order;
+
+  } catch (error) {
+    console.error(`Failed to fetch order details for #${OrderID}:`, error.message);
+    throw new Error(`Failed to fetch order details: ${error.message}`);
+  }
 };
 
-// Payment initiation - Handles the start of the payment flow
-const initiatePayment = async (OrderID, PaymentMethod, userToken) => {
-   console.log(`Initiating payment for OrderID ${OrderID} via ${PaymentMethod}`);
+const verifyToken = async (token) => {
+    if (!token) {
+        console.error("No token provided!");
+        throw new Error("Token is required.");
+      }
+    
+      //console.log("Verifying token:", token);
 
-  // Get UserID from the token payload
-  let userId = null;
-  try {
-    // Ensure userToken is 'Bearer token' format before removing 'Bearer '
-    const tokenString = userToken?.startsWith('Bearer ') ? userToken.replace('Bearer ', '') : userToken;
-    const decodedToken = jwt.decode(tokenString);
-    userId = decodedToken?.id || decodedToken?.userId;
-    if (!userId) {
-       console.error('User ID not found in token payload during payment initiation.');
-       // Consider throwing a specific authentication error or redirecting
-       throw new Error('User identification failed. Please login again.');
+  const response = await axios.post(
+    `http://localhost:4000/auth/verify`,
+    { token }, 
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     }
-     console.log(`User ID ${userId} extracted from token.`);
-  } catch (decodeError) {
-     console.error('Failed to decode user token:', decodeError.message);
-     throw new Error('Invalid or expired user token.');
-  }
-
-
-  // Validate the selected payment method against the allowed types
-  const allowedPaymentMethods = ['PayHere', 'Dialog Genie', 'FriMi', 'Stripe', 'PayPal'];
-   if (!allowedPaymentMethods.includes(PaymentMethod)) {
-      console.warn(`Attempted initiation with unsupported payment method: '${PaymentMethod}'.`);
-       throw new Error(`Payment method '${PaymentMethod}' is not supported.`);
-   }
-
-   if (PaymentMethod !== 'PayHere') {
-       console.error(`Logic for Payment Method '${PaymentMethod}' is not implemented yet.`);
-      // Throw an error if an unimplemented gateway is selected
-      throw new Error(`Payment method '${PaymentMethod}' is not implemented yet.`);
-   }
-
-
-  // Try to get order details from the order service
-  // Crucial for getting the amount, and user details (for notifications, PayHere pre-fill)
-  // The Order Service endpoint called by Payment Service must accept SERVICE_API_KEY
-  let orderDetails = await getOrderDetailsFromService(OrderID, userToken);
-
-  // DEVELOPMENT ONLY: If order details can't be fetched (e.g., service down, auth failure), use a mock in dev/test
-  // MODIFIED: Added check for production environment, refined mock data
-  if (!orderDetails && (NODE_ENV === 'development' || NODE_ENV === 'test')) {
-    console.warn(`Using mock order details for OrderID ${OrderID} due to service unavailability or auth failure.`);
-    // Ensure mock data has required fields, especially UserID, Email, Phone, Name/UserName
-    // UserID is IMPORTANT here because it must match the userId obtained from the token!
-    orderDetails = {
-      OrderID: OrderID, // Use actual OrderID
-      TotalAmount: 1000.00, // Example amount of 1000 LKR (use number)
-      UserID: userId, // Use extracted userId from token - CRITICAL for creating payment record
-      UserEmail: `user_${userId}@example.com`, // Mock email
-      Phone: `1${userId}1234567890`.substring(0,10), // Mock phone (ensure format)
-      Name: `Mock User ${userId}`, // Mock name
-      UserName: `MockUser${userId}`,
-      DeliveryAddress: `Mock Address for ${userId}`, // Add delivery address
-      // Add other relevant fields like OrderStatus if needed
-    };
-     console.warn(`Using mock order details for order #${OrderID}:`, orderDetails);
-  } else if (!orderDetails) {
-    console.error(`Order details could not be fetched for OrderID ${OrderID}. Check Order Service availability and Payment Service's ability to call it with SERVICE_API_KEY.`);
-    throw new Error(`Order #${OrderID} not found or accessible. Cannot proceed with payment.`);
-  }
-
-  // Validate and parse order total amount
-  let orderTotal = typeof orderDetails.TotalAmount === 'number'
-    ? orderDetails.TotalAmount
-    : parseFloat(orderDetails.TotalAmount);
-
-  if (isNaN(orderTotal) || orderTotal <= 0) { // ADDED: Check for valid positive amount
-    console.error(`Invalid or zero TotalAmount value received for order #${OrderID}: ${orderDetails.TotalAmount}`);
-    throw new Error('Invalid order amount.');
-  }
-
-   // Check for existing active payment *after* getting order details and amount validation
-   // This prevents initiating payment for an order that's already been paid for or is pending payment
-  const existingPayments = await PaymentModel.getPaymentsByOrderId(OrderID);
-
-  const hasActivePayment = existingPayments?.some(p =>
-    p.PaymentStatus === 'Pending' || p.PaymentStatus === 'Completed'
-    // Consider other statuses like 'Refunded' if they should also prevent new payments
   );
+  return response.data.user;
+};
 
-  if (hasActivePayment) {
-     const activePaymentStatus = existingPayments.find(p => p.PaymentStatus === 'Pending' || p.PaymentStatus === 'Completed')?.PaymentStatus;
-     console.warn(`Attempted to initiate payment for order #${OrderID} which already has an active payment (status: ${activePaymentStatus}).`);
-    throw new Error(`A payment for Order #${OrderID} is already in progress or completed.`);
-  }
+// Payment initiation
+const initiatePayment = async (orderId, token) => {
+  try {
+    // 1. Input validation
+    if (!orderId || isNaN(orderId)) {
+      throw new Error('Invalid order ID');
+    }
 
+    if (!token) {
+      throw new Error('Authentication token is required');
+    }
 
-  // Generate a unique ID for the initial payment record before gateway provides one.
-  // This is our internal identifier for the payment attempt.
-  // A UUID is better here, or a combination of orderID and timestamp + random.
-  const initialTransactionID = `INIT_${OrderID}_${Date.now()}`; // Use a more descriptive temp ID
+    // 2. Verify user
+    const user = await verifyToken(token);
+    if (!user || !user.id) {
+      throw new Error('Invalid user authentication');
+    }
 
-  const paymentData = {
-    OrderID,
-    UserID: userId,
-    TransactionID: initialTransactionID, // Use the initial temp ID
-    PaymentMethod,
-    PaymentStatus: 'Pending', // Initial status is pending gateway interaction
-    Amount: orderTotal // Use validated total amount
-  };
+    // In the initiatePayment function, update the order details handling
+const orderDetails = await getOrderDetailsFromService(orderId, token);
+if (!orderDetails) {
+  throw new Error(`Order #${orderId} not found`);
+}
 
-  // CREATE the initial payment record in your DB
-  // This record tracks the payment attempt.
-  const PaymentID = await PaymentModel.createPayment(paymentData);
-  console.log(`Created initial payment record #${PaymentID} for order #${OrderID} (User ${userId})`);
+// Get order total from order details
+const orderTotal = parseFloat(orderDetails.totalAmount || orderDetails.TotalAmount);
+if (isNaN(orderTotal) || orderTotal <= 0) {
+  throw new Error('Invalid order amount');
+}
 
-  let redirectUrl = ''; // URL to which the frontend redirects the user
+// Create payment record
+const paymentData = {
+  OrderID: orderId,
+  UserID: user.id,
+  PaymentMethod: 'PayHere',
+  PaymentStatus: 'Completed',
+  Amount: orderTotal
+};
 
-  if (PaymentMethod === 'PayHere') {
-    // Ensure environment variables are set correctly for PayHere
+    const PaymentID = await PaymentModel.createPayment(paymentData);
+
+    // 6. Generate PayHere checkout URL
     const baseUrl = process.env.PAYHERE_BASE_URL || 'https://sandbox.payhere.lk/pay/checkout';
+  // In the initiatePayment function:
+const hash = generateSignature({
+  merchant_id: PAYHERE_MERCHANT_ID,
+  order_id: orderId.toString(),
+  amount: orderTotal.toFixed(2), // Make sure amount has 2 decimal places
+  currency: 'LKR'
+}, PAYHERE_MERCHANT_SECRET);
 
-    // Generate the MD5 hash required by PayHere
-    // PayHere signature uses your internal order_id, amount, currency, and merchant secret hash
-    const hash = generateSignature({
-      merchant_id: PAYHERE_MERCHANT_ID, // Your PayHere merchant ID
-      order_id: OrderID.toString(), // Your internal OrderID (as string)
-      amount: orderTotal.toFixed(2), // Amount (string with 2 decimal places)
-      currency: 'LKR' // Currency (ensure it's supported by PayHere)
-    }, PAYHERE_MERCHANT_SECRET); // Your PayHere merchant secret
-
-     // Construct the redirect URL with all necessary query parameters for PayHere checkout
+// Log values for debugging
+console.log('Hash Generation Values:', {
+  merchant_id: PAYHERE_MERCHANT_ID,
+  order_id: orderId.toString(),
+  amount: orderTotal.toFixed(2),
+  currency: 'LKR',
+  hash: hash
+});
     const queryParams = new URLSearchParams({
       merchant_id: PAYHERE_MERCHANT_ID,
-      return_url: PAYHERE_RETURN_URL, // URL PayHere redirects user to after success/cancel
-      cancel_url: PAYHERE_CANCEL_URL, // URL PayHere redirects user to after cancellation
-      notify_url: PAYHERE_NOTIFY_URL, // URL PayHere sends background notification to (YOUR BACKEND)
-      order_id: OrderID.toString(), // Your internal OrderID - sent back in notification
-      items: `Food Order #${OrderID}`, // Description of items (can be simplified)
+      return_url: PAYHERE_RETURN_URL,
+      cancel_url: PAYHERE_CANCEL_URL,
+      notify_url: PAYHERE_NOTIFY_URL,
+      order_id: orderId.toString(),
+      items: `Food Order #${orderId}`,
       amount: orderTotal.toFixed(2),
       currency: 'LKR',
-      hash, // The generated signature
-      // Pass customer details for PayHere pre-filling - RECOMMENDED for better UX
-      first_name: orderDetails.Name || orderDetails.UserName || '',
-      email: orderDetails.UserEmail || orderDetails.Email || '',
-      phone: orderDetails.Phone || orderDetails.UserPhone || '',
-      address: orderDetails.DeliveryAddress || '', // If available in order details
-      city: 'Colombo', // Example city - use actual city if available
-      country: 'Sri Lanka' // Example country
+      hash
     }).toString();
 
-    redirectUrl = `${baseUrl}?${queryParams}`;
-     console.log(`Generated PayHere redirect URL for order #${OrderID}.`);
+    const redirectUrl = `${baseUrl}?${queryParams}`; // Fix: Declare with const
 
-  } else {
-     // TODO: Implement logic for other payment methods here
-     // Example for Stripe (conceptual):
-     /*
-     if (PaymentMethod === 'Stripe') {
-         const stripeAmount = Math.round(orderTotal * 100); // Amount in cents
-         const paymentIntent = await stripe.paymentIntents.create({
-             amount: stripeAmount,
-             currency: 'lkr', // Or 'usd', 'eur' etc.
-             payment_method_types: ['card'],
-             metadata: { order_id: OrderID, user_id: userId, payment_method: PaymentMethod },
-         });
-         // You might return client_secret and let frontend handle Stripe Elements
-         // or create a Stripe Checkout Session and return its URL
-         // redirectUrl = stripeCheckoutSession.url;
-         console.warn(`Stripe initiation not fully implemented.`);
-         // Need to handle the response from the Stripe API and determine what to send back to frontend
-     } else if (PaymentMethod === 'PayPal') {
-        // Call PayPal API to create payment...
-     }
-     */
-     console.error(`Logic for Payment Method '${PaymentMethod}' is not implemented.`);
-     // This branch should theoretically not be reached if the check above works, but included for safety
-     throw new Error(`Payment method '${PaymentMethod}' is not implemented yet.`);
+    // 7. Update order status and send notification asynchronously
+    Promise.all([
+      updateOrderPaymentStatus(orderId, 'Completed'),
+      sendPaymentNotification(orderId, 'Completed', orderTotal, token)
+    ]).catch(err => {
+      console.error('Async operations failed:', err);
+    });
+
+    // 8. Return success response
+    return {
+      success: true,
+      PaymentID,
+      redirectUrl,
+      PaymentStatus: 'Pending',
+      Amount: orderTotal
+    };
+
+  } catch (error) {
+    console.error(`Payment initiation failed for order #${orderId}:`, error);
+    throw error; // Let controller handle the error response
   }
-
-  // Update the order's status in the Order Service to 'Pending Payment' or similar
-  updateOrderPaymentStatus(OrderID, 'Pending') // Use a status like 'Payment_Pending'
-    .then(() => console.log(`Async order status update to Pending initiated for #${OrderID}`))
-    .catch(err => console.error(`Async order status update to Pending failed for #${OrderID}:`, err.message));
-
-  // Send initial notification about payment pending (e.g., In-App)
-  sendPaymentNotification(OrderID, 'Pending', orderTotal, userToken)
-     .then(() => console.log(`Async payment pending notification sent for #${OrderID}`))
-     .catch(err => console.error(`Async payment pending notification failed for #${OrderID}:`, err.message));
-
-
-  // Return the necessary details to the frontend
-  return {
-    PaymentID, // Return the ID of the record in your DB for tracking
-    redirectUrl, // The URL to redirect the user to for payment
-    PaymentStatus: 'Pending' // The status recorded in your DB
-  };
 };
 
-// Process PayHere Notification (Webhook Endpoint)
-// This function is called by PayHere in the background when a payment is completed, failed, or cancelled.
 const processPayHereNotification = async data => {
   console.log('Processing PayHere notification:', data);
   const {
@@ -473,7 +416,7 @@ const processPayHereNotification = async data => {
     );
     
     // FOR TESTING: Accept the payment anyway, but log warning
-    console.warn('⚠️ BYPASSING SIGNATURE VERIFICATION FOR TESTING ONLY ⚠️');
+    console.warn('BYPASSING SIGNATURE VERIFICATION FOR TESTING ONLY');
     // Remove the throw error line for testing only
     // throw new Error('MD5 signature mismatch');
   }
@@ -650,8 +593,8 @@ const processPayHereNotification = async data => {
   };
 };
 
-// Update payment status manually (e.g., by Admin)
-const updatePaymentStatus = async (PaymentID, newPaymentStatus) => { // Renamed parameter for clarity
+//for admin
+const updatePaymentStatus = async (PaymentID, newPaymentStatus) => {
   console.log(`Attempting to manually update payment #${PaymentID} status to ${newPaymentStatus}`);
   const paymentDetails = await PaymentModel.getPaymentById(PaymentID);
 
@@ -693,16 +636,11 @@ const updatePaymentStatus = async (PaymentID, newPaymentStatus) => { // Renamed 
    }
 
 
-  // Try to update order status in the Order Service asynchronously
   updateOrderPaymentStatus(paymentDetails.OrderID, orderStatusForOrderService)
     .then(() => console.log(`Async order status update (${orderStatusForOrderService}) initiated for #${paymentDetails.OrderID}`))
     .catch(err => console.error(`Async order status update (${orderStatusForOrderService}) failed for #${paymentDetails.OrderID}:`, err.message));
 
-
-  // Try to send notifications for the manual status change asynchronously
-  // Note: We don't have the original userToken here.
-  // If sendPaymentNotification needs user details, it will have to fetch them via getOrderDetailsFromService (using SERVICE_API_KEY)
-  sendPaymentNotification(paymentDetails.OrderID, newPaymentStatus, paymentDetails.Amount, null) // Pass amount, use null for userToken
+  sendPaymentNotification(paymentDetails.OrderID, newPaymentStatus, paymentDetails.Amount, null)
     .then(() => console.log(`Async payment notification sent for #${paymentDetails.OrderID} status change to ${newPaymentStatus}`))
     .catch(err => console.error(`Async payment notification failed for #${paymentDetails.OrderID}:`, err.message));
 
@@ -710,7 +648,6 @@ const updatePaymentStatus = async (PaymentID, newPaymentStatus) => { // Renamed 
   return { success: true, message: 'Payment status updated successfully' };
 };
 
-// Get payment details by internal PaymentID
 const getPaymentById = async (PaymentID) => {
    console.log(`Fetching payment details for PaymentID: ${PaymentID}`);
   const payment = await PaymentModel.getPaymentById(PaymentID);
@@ -722,52 +659,45 @@ const getPaymentById = async (PaymentID) => {
   return payment;
 };
 
-// Get all payments associated with a specific OrderID
 const getPaymentsByOrderId = async (OrderID) => {
    console.log(`Fetching payments for OrderID: ${OrderID}`);
   const payments = await PaymentModel.getPaymentsByOrderId(OrderID);
 
   if (!payments || payments.length === 0) {
      console.warn(`No payments found for Order #${OrderID}`);
-    // It's okay for an order to have no payments yet, return empty array instead of throwing error
     return [];
-    // throw new Error(`No payments found for Order #${OrderID}`); // Original behavior
+    // throw new Error(`No payments found for Order #${OrderID}`); 
   }
   return payments;
 };
 
-// Get payment history for a specific user
-const getPaymentHistoryByUserId = async (userId) => { // Removed userToken parameter
+const getPaymentHistoryByUserId = async (userId) => {
   console.log(`Fetching payment history for UserID: ${userId}`);
   if (!userId) {
     throw new Error('User ID is required');
   }
-
-  // Calls the efficient repository method that queries by UserID
   const payments = await PaymentModel.getPaymentHistoryByUserId(userId);
 
-  // Format the payment data for the response (optional, can be done in frontend)
   return payments.map(payment => ({
     PaymentID: payment.PaymentID,
     OrderID: payment.OrderID,
-    Amount: payment.Amount, // Ensure this is a number from DB
+    Amount: payment.Amount,
     PaymentMethod: payment.PaymentMethod,
     Status: payment.PaymentStatus,
-    CreatedAt: payment.PaymentDate, // Use PaymentDate or CreatedAt
-    TransactionReference: payment.TransactionID || null // Use TransactionID
+    CreatedAt: payment.PaymentDate,
+    TransactionReference: payment.TransactionID || null
   }));
 };
 
-// Expose functions for the controller to use
 module.exports = {
   initiatePayment,
   processPayHereNotification,
   updatePaymentStatus,
-  // generateSignature, // Might be useful for testing or other flows
-  updateOrderPaymentStatus, // Expose if needed elsewhere, but primarily internal helper
-  sendPaymentNotification, // Expose if needed elsewhere, but primarily internal helper
+   generateSignature, 
+  updateOrderPaymentStatus,
+  sendPaymentNotification,
   getPaymentById,
   getPaymentsByOrderId,
-  getOrderDetailsFromService, // Expose if needed elsewhere, but primarily internal helper
+  getOrderDetailsFromService,
   getPaymentHistoryByUserId
 };
