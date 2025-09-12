@@ -1,33 +1,38 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "./generated/prisma/client"
+  provider      = "prisma-client-js"
+  output        = "./generated/prisma/client"
   binaryTargets = ["windows", "darwin-arm64", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Restaurants {
-  RestaurantID   Int         @id @default(autoincrement())
-  OwnerID        Int?
-  RestaurantName String      @db.VarChar(255)
-  Address        String      @db.Text
-  Phone          String?     @db.VarChar(15)
-  Email          String?     @db.VarChar(255)
-  Availability   String      @db.VarChar(255)
+  RestaurantID   Int         @id @default(autoincrement()) @map("restaurantid")
+  OwnerID        Int?                                        @map("ownerid")
+  RestaurantName String      @db.VarChar(255)                @map("restaurantname")
+  Address        String      @db.Text                        @map("address")
+  Phone          String?     @db.VarChar(15)                 @map("phone")
+  Email          String?     @db.VarChar(255)                @map("email")
+  Availability   String      @db.VarChar(255)                @map("availability")
+
   MenuItems      MenuItems[]
+
+  @@map("restaurants")
 }
 
 model MenuItems {
-  MenuItemID   Int          @id @default(autoincrement())
-  RestaurantID Int?
-  Name         String       @db.VarChar(255)
-  Description  String?      @db.Text
-  Price        Decimal      @db.Decimal(10, 2)
-  IsAvailable  Boolean?     @default(true)
+  MenuItemID   Int          @id @default(autoincrement()) @map("menuitemid")
+  RestaurantID Int?                                        @map("restaurantid")
+  Name         String       @db.VarChar(255)               @map("name")
+  Description  String?      @db.Text                       @map("description")
+  Price        Decimal      @db.Decimal(10, 2)             @map("price")
+  IsAvailable  Boolean?     @default(true)                 @map("isavailable")
+
   Restaurants  Restaurants? @relation(fields: [RestaurantID], references: [RestaurantID], onDelete: Cascade, onUpdate: NoAction, map: "menuitems_ibfk_1")
 
-  @@index([RestaurantID], map: "RestaurantID")
+  @@index([RestaurantID], map: "restaurantid")
+  @@map("menuitems")
 }

@@ -5,29 +5,34 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Restaurants {
-  RestaurantID   Int         @id @default(autoincrement())
-  OwnerID        Int?
-  RestaurantName String      @db.VarChar(255)
-  Address        String      @db.Text
-  Phone          String?     @db.VarChar(15)
-  Email          String?     @db.VarChar(255)
-  Availability   String      @db.VarChar(255)
-  MenuItems      MenuItems[]
+  RestaurantID   Int     @id @default(autoincrement()) @map("restaurantid")
+  OwnerID        Int?    @map("ownerid")
+  RestaurantName String  @map("restaurantname") @db.VarChar(255)
+  Address        String  @map("address") @db.Text
+  Phone          String? @map("phone") @db.VarChar(15)
+  Email          String? @map("email") @db.VarChar(255)
+  Availability   String  @map("availability") @db.VarChar(255)
+
+  MenuItems MenuItems[]
+
+  @@map("restaurants")
 }
 
 model MenuItems {
-  MenuItemID   Int          @id @default(autoincrement())
-  RestaurantID Int?
-  Name         String       @db.VarChar(255)
-  Description  String?      @db.Text
-  Price        Decimal      @db.Decimal(10, 2)
-  IsAvailable  Boolean?     @default(true)
-  Restaurants  Restaurants? @relation(fields: [RestaurantID], references: [RestaurantID], onDelete: Cascade, onUpdate: NoAction, map: "menuitems_ibfk_1")
+  MenuItemID   Int      @id @default(autoincrement()) @map("menuitemid")
+  RestaurantID Int?     @map("restaurantid")
+  Name         String   @map("name") @db.VarChar(255)
+  Description  String?  @map("description") @db.Text
+  Price        Decimal  @map("price") @db.Decimal(10, 2)
+  IsAvailable  Boolean? @default(true) @map("isavailable")
 
-  @@index([RestaurantID], map: "RestaurantID")
+  Restaurants Restaurants? @relation(fields: [RestaurantID], references: [RestaurantID], onDelete: Cascade, onUpdate: NoAction, map: "menuitems_ibfk_1")
+
+  @@index([RestaurantID], map: "restaurantid")
+  @@map("menuitems")
 }
