@@ -12,11 +12,23 @@ const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:4001'
 
 // Nodemailer transporter setup
 const transporter = nodemailer.createTransport({
-  service: "gmail", // Or other service/host details
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS
   },
+  debug: true // Enable debug logging
+});
+
+// Add verification
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('SMTP connection error:', error);
+  } else {
+    console.log('SMTP server is ready to send emails');
+  }
 });
 
 // Helper function to fetch user details (email, phone)
