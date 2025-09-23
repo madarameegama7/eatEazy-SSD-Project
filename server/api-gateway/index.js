@@ -6,7 +6,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 
-app.use(cors());
+//app.use(cors());
 app.use(helmet());
 app.disable("x-powered-by");
 
@@ -20,6 +20,23 @@ const services = {
   payments: process.env.PAYMENT_SERVICE_URL,
   delivery: process.env.DELIVERY_SERVICE_URL,
 };
+
+// Define a strict CSP policy
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://trusted.cdn.com"],
+      styleSrc: ["'self'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  })
+);
 
 app.use(
   "/auth",
