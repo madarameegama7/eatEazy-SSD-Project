@@ -31,7 +31,7 @@ interface FormData {
 
 const RegisterSection: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [role, setRole] = useState<string>("");
+  const [role, setRole] = useState<string>("Customer");
   const [formData, setFormData] = useState<FormData>({
     firstname: "",
     lastname: "",
@@ -217,31 +217,68 @@ const RegisterSection: React.FC = () => {
             ),
           }}
         />
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Role</InputLabel>
-          <Select value={role} onChange={handleRoleChange} label="Role">
-            {ALLOWED_ROLES.map((role) => (
-              <MenuItem key={role} value={role}>
-                {role}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Button
-          variant="contained"
-          disabled={loading}
-          onClick={handleSubmit}
-          sx={{
-            background: "#EA7300",
-            padding: "0.8rem",
-            fontSize: "16px",
-            fontWeight: "bold",
-            borderRadius: "30px",
-            textTransform: "none",
-          }}
-        >
-          {loading ? "Registering..." : "Register"}
-        </Button>
+     <TextField
+  label="Role"
+  name="role"
+  value={role}
+  variant="outlined"
+  fullWidth
+  sx={{ mb: 2 }}
+  InputProps={{
+    readOnly: true,
+  }}
+/>
+        <Box sx={{ display: "flex", gap: 2, mt: 2, flexWrap: "wrap" }}>
+          {/* Normal Register Button */}
+          <Button
+            variant="contained"
+            disabled={loading}
+            onClick={handleSubmit}
+            sx={{
+              background: "#EA7300",
+              padding: "0.8rem",
+              fontSize: "16px",
+              fontWeight: "bold",
+              borderRadius: "30px",
+              textTransform: "none",
+              flex: 1,
+            }}
+          >
+            {loading ? "Registering..." : "Register"}
+          </Button>
+
+          {/* Google OAuth Button */}
+          <Button
+            variant="outlined"
+            onClick={() =>
+              (window.location.href = "https://accounts.google.com/o/oauth2/v2/auth?client_id=658533228628-7ts7oihgtp70trnjj32prft363q1rf7a.apps.googleusercontent.com&redirect_uri=http://localhost:4000/auth/google/callback&response_type=code&scope=profile email")
+            }
+            startIcon={
+              <img
+                src="/assets/google-logo.png" // add a Google logo in your public/assets folder
+                alt="Google"
+                style={{ width: 30, height: 30 }}
+              />
+            }
+            sx={{
+              borderColor: "#EA7300",
+              color: "#EA7300",
+              padding: "0.8rem",
+              fontSize: "16px",
+              fontWeight: "bold",
+              borderRadius: "30px",
+              textTransform: "none",
+              flex: 1,
+              "&:hover": {
+                backgroundColor: "#FFE6CC",
+                borderColor: "#EA7300",
+              },
+            }}
+          >
+            Register with Google
+          </Button>
+        </Box>
+
         <Typography
           variant="subtitle1"
           sx={{
