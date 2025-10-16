@@ -1,6 +1,7 @@
 // controllers/notificationController.js
 const NotificationService = require('../services/notificationService'); 
 const NotificationTypes = require('../constants/notificationTypes');
+const { logger, mask } = require('../utils/logger');
 
 // Handle request to create a notification (intended for service-to-service calls)
 const createNotification = async (req, res) => {
