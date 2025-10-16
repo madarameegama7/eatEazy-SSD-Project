@@ -51,7 +51,7 @@ router.get("/auth/google",
 );
 
 // Google callback
-router.get("/auth/google/callback",
+router.get("/google/callback",
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
     // Create JWT and send back to frontend
