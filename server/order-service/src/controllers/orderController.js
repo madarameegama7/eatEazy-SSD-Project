@@ -49,47 +49,107 @@ const checkout = async (req, res) => {
 
 const getOrder = async (req, res) => {
   try {
-    const order = await orderService.getOrderById(parseInt(req.params.id));
+    const orderId = parseInt(req.params.id);
+    const loggedInUser = req.user;
+
+    const order = await orderService.getOrderById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Access control: allow only Admin, order owner, or restaurant owner for that restaurant
+    if (
+      loggedInUser.role !== 'Admin' &&
+      loggedInUser.id !== order.UserID &&
+      !(loggedInUser.role === 'Restaurant' && loggedInUser.restaurantId === order.RestaurantID)
+    ) {
+      return res.status(403).json({ message: 'Access denied: Not authorized to view this order' });
+    }
+
     res.json(order);
   } catch (error) {
+    console.error('Error fetching order:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
-const getCartByCartId = async(req,res)=>{
+
+const getCartByCartId = async (req, res) => {
   try {
-    const order = await orderService.getCartByCartId(parseInt(req.params.id));
-    if (!order) return res.status(404).json({ message: "Order not found" });
-    res.json(order);
+    const cartId = parseInt(req.params.id);
+    const loggedInUser = req.user;
+
+    const cart = await orderService.getCartByCartId(cartId);
+    if (!cart || cart.length === 0) return res.status(404).json({ message: "Cart not found" });
+
+    // Check ownership using first cart item's user
+    const cartOwnerId = cart[0].UserID;
+    const restaurantId = cart[0].RestaurantID;
+
+    if (
+      loggedInUser.role !== 'Admin' &&
+      loggedInUser.id !== cartOwnerId &&
+      !(loggedInUser.role === 'Restaurant' && loggedInUser.restaurantId === restaurantId)
+    ) {
+      return res.status(403).json({ message: 'Access denied: Not authorized to view this cart' });
+    }
+
+    res.json(cart);
   } catch (error) {
+    console.error('Error fetching cart:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
-const getOrderByUserId=async(req,res)=>{
-  try{
-    const order=await orderService.getOrderByUserId(parseInt(req.params.id));
-    if(!order) return res.status(404).json({message: "No orders for user"});
-    res.json(order);
 
-  }catch(error){
-   res.status(500).json({message: error.message});
+const getOrderByUserId = async (req, res) => {
+  try {
+    const requestedUserId = req.params.id;
+    const loggedInUser = req.user;
+
+    // Allow only the owner or an admin to access
+    if (loggedInUser.role !== 'Admin' && loggedInUser.id !== requestedUserId) {
+      return res.status(403).json({ message: 'Access denied: Not your orders' });
+    }
+
+    const orders = await OrderRepository.getOrdersByUserId(requestedUserId);
+
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ message: 'No orders found' });
+    }
+
+    res.json(orders);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
-
 };
 
-const getAllOrderbyRestaurantId=async(req,res)=>{
-  try{
 
-    const order=await orderService.getAllOrderbyRestaurantId(parseInt(req.params.id));
-    if(!order) return res.status(404).json({message:"No orders for restaurant"});
-    res.json(order);
-  }catch(error){
-    res.status(500).json({message: error.message});
+const getAllOrderbyRestaurantId = async (req, res) => {
+  try {
+    const requestedRestaurantId = req.params.id;
+    const loggedInUser = req.user;
 
+    // Allow only restaurant owners for their own restaurant OR admins
+    if (
+      loggedInUser.role !== 'Admin' &&
+      !(loggedInUser.role === 'Restaurant' && loggedInUser.restaurantId === requestedRestaurantId)
+    ) {
+      return res.status(403).json({ message: 'Access denied: Not authorized to view these orders' });
+    }
+
+    const orders = await OrderRepository.getOrdersByRestaurantId(requestedRestaurantId);
+
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ message: 'No orders found for this restaurant' });
+    }
+
+    res.json(orders);
+  } catch (err) {
+    console.error('Error fetching restaurant orders:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
+
 const getAllOrdersForAdmin=async(req,res)=>{
   try{
 
@@ -121,17 +181,33 @@ const getOrderTotal = async (req, res) => {
 const updateCartByCartId = async (req, res) => {
   const { cartId } = req.params;
   const { items } = req.body;
-  
+  const loggedInUser = req.user;
+
   try {
+    const cart = await orderService.getCartByCartId(parseInt(cartId));
+    if (!cart || cart.length === 0) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Carts are tied to orders/users, so check first cart item to confirm ownership
+    const cartOwnerId = cart[0].UserID;
+
+    if (
+      loggedInUser.role !== 'Admin' &&
+      loggedInUser.id !== cartOwnerId
+    ) {
+      return res.status(403).json({ message: 'Access denied: Not authorized to update this cart' });
+    }
+
     const result = await orderService.updateCart(parseInt(cartId), items);
     res.status(200).json({
       message: "Cart updated successfully",
       data: result
     });
   } catch (error) {
-    res.status(500).json({ 
-      message: "Failed to update cart or order", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to update cart or order",
+      error: error.message
     });
   }
 };
@@ -140,6 +216,21 @@ const updateCartByCartId = async (req, res) => {
 const deleteOrder = async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
+    const loggedInUser = req.user;
+
+    const order = await orderService.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Allow only if Admin or the user who created the order
+    if (
+      loggedInUser.role !== 'Admin' &&
+      loggedInUser.id !== order.UserID
+    ) {
+      return res.status(403).json({ message: 'Access denied: Not authorized to delete this order' });
+    }
+
     const result = await orderService.deleteOrder(orderId);
     res.json(result);
   } catch (error) {
@@ -166,10 +257,6 @@ const updatePaymentStatus = async (req, res) => {
     res.status(500).json({ message: 'Failed to update payment status' });
   }
 };
-
-
-
-
 
 module.exports = {
   addToCart,

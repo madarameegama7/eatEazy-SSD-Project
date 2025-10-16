@@ -5,8 +5,8 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node init && node app.js",
+    "dev": "node init && nodemon app.js"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +15,7 @@
     "axios": "^1.9.0",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",

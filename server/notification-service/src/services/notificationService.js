@@ -3,6 +3,7 @@ const NotificationModel = require("../models/notificationModel");
 const nodemailer = require("nodemailer");
 const axios = require("axios");
 const templates = require("./notificationTemplates");
+const { logger, mask } = require('../utils/logger');
 require("dotenv").config();
 
 // Import SERVICE_API_KEY and API_GATEWAY_URL from env
@@ -98,7 +99,7 @@ const NotificationService = {
     try {
         const { subject, text } = templates.emailTemplates[type](data); // Use template key
 
-        console.log(`Attempting to send email to ${email} (UserID ${userId}) with subject: "${subject}"`);
+        logger.info(`Attempting to send email to ${mask(email)} (UserID ${userId})`);
 
         const mailOptions = {
             from: process.env.EMAIL_USER,

@@ -182,7 +182,6 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
-  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
@@ -191,8 +190,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  output        = \"./generated/prisma/client\"\n  binaryTargets = [\"windows\", \"darwin-arm64\", \"linux-musl-arm64-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel RefreshTokens {\n  TokenID   Int      @id @default(autoincrement()) @map(\"tokenid\")\n  Token     String   @unique @map(\"token\")\n  UserID    Int      @map(\"userid\")\n  ExpiresAt DateTime @map(\"expiresat\")\n  CreatedAt DateTime @default(now()) @map(\"createdat\")\n  UpdatedAt DateTime @updatedAt @map(\"updatedat\")\n\n  user Users @relation(fields: [UserID], references: [UserID])\n\n  @@map(\"refreshtokens\")\n}\n\nmodel Users {\n  UserID       Int        @id @default(autoincrement()) @map(\"userid\")\n  Firstname    String     @map(\"firstname\") @db.VarChar(255)\n  Lastname     String     @map(\"lastname\") @db.VarChar(255)\n  PasswordHash String     @map(\"passwordhash\") @db.VarChar(255)\n  Email        String     @unique @map(\"email\") @db.VarChar(255)\n  Phone        String?    @map(\"phone\") @db.VarChar(15)\n  Role         Users_Role @map(\"role\")\n\n  refreshTokens RefreshTokens[]\n\n  @@map(\"users\")\n}\n\nenum Users_Role {\n  Admin\n  Restaurant\n  Customer\n  DeliveryPerson\n\n  @@map(\"users_role\")\n}\n",
-  "inlineSchemaHash": "458988d09ac7da740a98860d97bd83a35aeb653ca496c738e6522596439fa9c2",
+  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  output        = \"./generated/prisma/client\"\n  binaryTargets = [\"windows\", \"darwin-arm64\", \"linux-musl-arm64-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel RefreshTokens {\n  TokenID   Int      @id @default(autoincrement()) @map(\"tokenid\")\n  Token     String   @unique @map(\"token\")\n  UserID    Int      @map(\"userid\")\n  ExpiresAt DateTime @map(\"expiresat\")\n  CreatedAt DateTime @default(now()) @map(\"createdat\")\n  UpdatedAt DateTime @updatedAt @map(\"updatedat\")\n\n  user Users @relation(fields: [UserID], references: [UserID])\n\n  @@map(\"refreshtokens\")\n}\n\nmodel Users {\n  UserID       Int        @id @default(autoincrement()) @map(\"userid\")\n  Firstname    String     @map(\"firstname\") @db.VarChar(255)\n  Lastname     String     @map(\"lastname\") @db.VarChar(255)\n  PasswordHash String?    @map(\"passwordhash\") @db.VarChar(255)\n  Email        String     @unique @map(\"email\") @db.VarChar(255)\n  Phone        String?    @map(\"phone\") @db.VarChar(15)\n  Role         Users_Role @map(\"role\")\n\n  refreshTokens RefreshTokens[]\n\n  @@map(\"users\")\n}\n\nenum Users_Role {\n  Admin\n  Restaurant\n  Customer\n  DeliveryPerson\n\n  @@map(\"users_role\")\n}\n",
+  "inlineSchemaHash": "2dbf2d60374ada262ce955fb070012c7847a3b858dff50e1ebe864682bc7ee8e",
   "copyEngine": true
 }
 config.dirname = '/'

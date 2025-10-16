@@ -1,6 +1,6 @@
-import React, { ChangeEvent } from "react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// LoginSection.tsx
+import React, { ChangeEvent, useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -28,20 +28,57 @@ const LoginSection: React.FC = () => {
     email: "",
     password: "",
   });
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useMediaQuery((theme: Theme) =>
     theme.breakpoints.down("sm")
   );
 
+  // OAuth token handling
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+
+    if (token) {
+      setTokens(token, ""); // Save access token (no refresh token in this case)
+      UserApi.verifyToken()
+        .then((user) => {
+          if (!user || !user.role) {
+            navigate("/login");
+            return;
+          }
+
+          switch (user.role) {
+            case "Admin":
+              navigate("/admin");
+              break;
+            case "Restaurant":
+              navigate("/restaurant");
+              break;
+            case "Customer":
+              navigate("/customer");
+              break;
+            case "DeliveryPerson":
+              navigate("/delivery");
+              break;
+            default:
+              navigate("/login");
+          }
+        })
+        .catch((err) => {
+          console.error("OAuth verification failed:", err);
+          navigate("/login");
+        });
+    }
+  }, [location, navigate]);
+
+  // for normal login
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async () => {
@@ -53,14 +90,10 @@ const LoginSection: React.FC = () => {
         password: formData.password,
       });
       const { accessToken, refreshToken } = response;
-
       setTokens(accessToken, refreshToken);
 
       const user = await UserApi.verifyToken();
-
-      if (!user || !user.role) {
-        throw new Error("Failed to fetch user details.");
-      }
+      if (!user || !user.role) throw new Error("Failed to fetch user details.");
 
       switch (user.role) {
         case "Admin":
@@ -79,23 +112,15 @@ const LoginSection: React.FC = () => {
           navigate("/404");
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message || "Failed to login");
-      } else {
-        setError("Failed to login");
-      }
+      if (err instanceof Error) setError(err.message || "Failed to login");
+      else setError("Failed to login");
     } finally {
       setLoading(false);
     }
   };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword((prevState) => !prevState);
-  };
-
-  const handleRegisterClick = () => {
-    navigate("/register");
-  };
+  const togglePasswordVisibility = () => setShowPassword((prev) => !prev);
+  const handleRegisterClick = () => navigate("/register");
 
   return (
     <Box
@@ -110,7 +135,7 @@ const LoginSection: React.FC = () => {
         padding: "2rem",
       }}
     >
-      {/* Left Content (Login Form) */}
+      {/* Left Form */}
       <Box
         sx={{
           width: isMobile ? "100%" : "40%",
@@ -139,10 +164,7 @@ const LoginSection: React.FC = () => {
         </Typography>
 
         {error && (
-          <Typography
-            color="error"
-            sx={{ mb: 2, textAlign: isMobile ? "center" : "left" }}
-          >
+          <Typography color="error" sx={{ mb: 2 }}>
             {error}
           </Typography>
         )}
@@ -156,19 +178,10 @@ const LoginSection: React.FC = () => {
           fullWidth
           sx={{
             mb: 2,
-            "& .MuiOutlinedInput-root": {
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#EA7300",
-              },
-              "&.Mui-focused": {
-                color: "#EA7300",
-              },
-            },
-            "& .MuiInputLabel-root": {
-              "&.Mui-focused": {
-                color: "#EA7300",
-              },
-            },
+            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+              { borderColor: "#EA7300" },
+            "& .MuiOutlinedInput-root.Mui-focused": { color: "#EA7300" },
+            "& .MuiInputLabel-root.Mui-focused": { color: "#EA7300" },
           }}
         />
         <TextField
@@ -181,76 +194,89 @@ const LoginSection: React.FC = () => {
           fullWidth
           sx={{
             mb: 2,
-            "& .MuiOutlinedInput-root": {
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#EA7300",
-              },
-              "&.Mui-focused": {
-                color: "#EA7300",
-              },
-            },
-            "& .MuiInputLabel-root": {
-              "&.Mui-focused": {
-                color: "#EA7300",
-              },
-            },
+            "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
+              { borderColor: "#EA7300" },
+            "& .MuiOutlinedInput-root.Mui-focused": { color: "#EA7300" },
+            "& .MuiInputLabel-root.Mui-focused": { color: "#EA7300" },
           }}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton
-                  onClick={togglePasswordVisibility}
-                  edge="end"
-                  sx={{
-                    outline: "none",
-                    "&:focus": {
-                      outline: "none",
-                    },
-                  }}
-                >
+                <IconButton onClick={togglePasswordVisibility} edge="end">
                   {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
                 </IconButton>
               </InputAdornment>
             ),
           }}
         />
+
+        {/* Normal Login Button */}
         <Button
           variant="contained"
           onClick={handleSubmit}
           sx={{
-            background: "#EA7300",
+            background: "linear-gradient(90deg, #FF7A00, #FFB347)",
             padding: "0.8rem",
             fontSize: "16px",
             fontWeight: "bold",
-            borderRadius: "30px",
+            borderRadius: "50px",
             textTransform: "none",
-            outline: "none",
             width: "100%",
-            "&:focus": {
-              outline: "none",
+            boxShadow: "0px 4px 15px rgba(234, 115, 0, 0.4)",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              background: "linear-gradient(90deg, #FFB347, #FF7A00)",
+              boxShadow: "0px 6px 20px rgba(234, 115, 0, 0.5)",
             },
           }}
         >
-          {loading ? "Login" : "Login"}
+          {loading ? "Logging in..." : "Login"}
+        </Button>
+
+        {/* Google Login Button */}
+        <Button
+          variant="outlined"
+          onClick={() =>
+            (window.location.href =
+              "https://accounts.google.com/o/oauth2/v2/auth?client_id=658533228628-7ts7oihgtp70trnjj32prft363q1rf7a.apps.googleusercontent.com&redirect_uri=http://localhost:4000/auth/google/callback&response_type=code&scope=profile email")
+          }
+          startIcon={
+            <img
+              src="/assets/google-logo.png"
+              alt="Google"
+              style={{ width: 25, height: 25 }}
+            />
+          }
+          sx={{
+            borderColor: "#EA7300",
+            color: "#EA7300",
+            padding: "0.8rem",
+            fontSize: "16px",
+            fontWeight: "bold",
+            borderRadius: "50px",
+            textTransform: "none",
+            width: "100%",
+            mt: 2,
+            transition: "all 0.3s ease",
+            "&:hover": {
+              backgroundColor: "#FFF2E0",
+              borderColor: "#EA7300",
+              transform: "translateY(-2px)",
+              boxShadow: "0px 4px 10px rgba(234, 115, 0, 0.3)",
+            },
+          }}
+        >
+          Login with Google
         </Button>
 
         <Typography
           variant="subtitle1"
-          sx={{
-            color: "gray",
-            mt: 6,
-            mb: 3,
-            textAlign: isMobile ? "center" : "left",
-          }}
+          sx={{ color: "gray", mt: 6, textAlign: isMobile ? "center" : "left" }}
         >
           Don't have an account?{" "}
           <span
             onClick={handleRegisterClick}
-            style={{
-              color: "#EA7300",
-              cursor: "pointer",
-              textDecoration: "none",
-            }}
+            style={{ color: "#EA7300", cursor: "pointer" }}
           >
             Click Here to Register
           </span>
@@ -258,18 +284,15 @@ const LoginSection: React.FC = () => {
       </Box>
 
       {/* Right Image */}
-      <Box
-        sx={{
-          position: "relative",
-          display: isMobile ? "none" : "block",
-        }}
-      >
-        <img
-          src={logo}
-          alt="Delicious Food"
-          style={{ borderRadius: "50%", width: "600px", height: "600px" }}
-        />
-      </Box>
+      {!isMobile && (
+        <Box sx={{ position: "relative" }}>
+          <img
+            src={logo}
+            alt="Delicious Food"
+            style={{ borderRadius: "50%", width: 600, height: 600 }}
+          />
+        </Box>
+      )}
     </Box>
   );
 };
