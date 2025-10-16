@@ -255,7 +255,7 @@ const RegisterSection: React.FC = () => {
             }
             startIcon={
               <img
-                src="/assets/google-logo.png" // add a Google logo in your public/assets folder
+                src="/assets/google-logo.png"
                 alt="Google"
                 style={{ width: 30, height: 30 }}
               />

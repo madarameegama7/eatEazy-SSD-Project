@@ -1,4 +1,3 @@
-// validation/notificationValidation.js
 const { body } = require("express-validator");
 
 exports.validateCreateNotification = [
