@@ -26,6 +26,7 @@ app.use(passport.session());
 
 const PORT = process.env.AUTH_SERVICE_PORT || 5002;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN;
+const { GOOGLE_AUTH_REDIRECT } = process.env;
 
 // CORS configuration for all routes
 app.use(
@@ -50,9 +51,15 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", FRONTEND_ORIGIN],
-        styleSrc: ["'self'", FRONTEND_ORIGIN],
-        connectSrc: ["'self'", FRONTEND_ORIGIN, `http://localhost:${PORT}`],
+        scriptSrc: ["'self'", FRONTEND_ORIGIN, GOOGLE_AUTH_REDIRECT],
+        styleSrc: ["'self'", FRONTEND_ORIGIN, GOOGLE_AUTH_REDIRECT],
+        connectSrc: [
+          "'self'",
+          FRONTEND_ORIGIN,
+          GOOGLE_AUTH_REDIRECT,
+          `http://localhost:${PORT}`,
+          "http://localhost:4000",
+        ],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
         baseUri: ["'self'"],
@@ -62,41 +69,10 @@ app.use(
   })
 );
 
+
 // Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Google OAuth Callback
-app.get("/auth/google/callback", async (req, res) => {
-  const code = req.query.code;
-
-  try {
-    const response = await axios.post("https://oauth2.googleapis.com/token", {
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: `http://localhost:${PORT}/auth/google/callback`,
-      grant_type: "authorization_code",
-    });
-
-    const { access_token } = response.data;
-
-    // Decode user info
-    const userInfo = await axios.get(
-      `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`
-    );
-
-    console.log("Google User:", userInfo.data);
-
-
-    res.redirect(
-      `http://localhost:5173/register-success?token=${"myJwt"}`
-    );
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Google Authentication failed");
-  }
-});
 
 // Routes
 app.use("/", authRoutes);
